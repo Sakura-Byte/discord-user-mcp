@@ -2,6 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { DiscordClient } from "../client.js";
 import { registerChannelTools } from "./channels.js";
 import { registerDMTools } from "./dms.js";
+import { registerFindTools } from "./find.js";
 import { registerGuildTools } from "./guilds.js";
 import { registerMemberTools } from "./members.js";
 import { registerMessageTools } from "./messages.js";
@@ -18,6 +19,7 @@ export function registerAllTools(
   registerChannelTools(server, client);
   registerMessageTools(server, client);
   registerSearchTools(server, client);
+  registerFindTools(server, client);
   registerDMTools(server, client);
   registerReactionTools(server, client);
   registerPinTools(server, client);

@@ -1,8 +1,14 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import type { DiscordClient } from "../client.js";
-import { formatSearchResults } from "../formatters.js";
-import { resolveGuildId, toolError, toolResult } from "./helpers.js";
+import { DiscordAPIError, type DiscordClient } from "../client.js";
+import { formatMessage, formatSearchResults } from "../formatters.js";
+import {
+  resolveAuthor,
+  resolveGuildId,
+  scanChannelMessages,
+  toolError,
+  toolResult,
+} from "./helpers.js";
 
 /**
  * Convert a YYYY-MM-DD date string to a Discord snowflake ID.
@@ -17,31 +23,6 @@ function dateToSnowflake(dateStr: string): string | null {
   const DISCORD_EPOCH = 1420070400000;
   const snowflake = BigInt(ts - DISCORD_EPOCH) << 22n;
   return snowflake.toString();
-}
-
-/**
- * Resolve an author parameter to a user ID.
- * If it looks like a snowflake (all digits), use directly.
- * Otherwise search guild members by username.
- */
-async function resolveAuthor(
-  client: DiscordClient,
-  guildId: string,
-  author: string,
-): Promise<string | null> {
-  if (/^\d+$/.test(author)) return author;
-
-  const members = await client.searchGuildMembers(guildId, author, 5);
-  if (members.length === 0) return null;
-
-  // Exact match preferred
-  const exact = members.find(
-    (m) =>
-      m.user.username.toLowerCase() === author.toLowerCase() ||
-      m.user.global_name?.toLowerCase() === author.toLowerCase() ||
-      m.nick?.toLowerCase() === author.toLowerCase(),
-  );
-  return exact ? exact.user.id : members[0]!.user.id;
 }
 
 export function registerSearchTools(
@@ -123,19 +104,46 @@ export function registerSearchTools(
         maxId = snowflake ?? before;
       }
 
-      const results = await client.searchGuild(id, {
-        content,
-        author_id: authorId,
-        channel_id,
-        has,
-        min_id: minId,
-        max_id: maxId,
-      });
+      try {
+        const results = await client.searchGuild(id, {
+          content,
+          author_id: authorId,
+          channel_id,
+          has,
+          min_id: minId,
+          max_id: maxId,
+        });
 
-      const maxResults = limit ?? 25;
-      const trimmed = results.messages.slice(0, maxResults);
+        const maxResults = limit ?? 25;
+        const trimmed = results.messages.slice(0, maxResults);
 
-      return toolResult(formatSearchResults(trimmed, results.total_results));
+        return toolResult(formatSearchResults(trimmed, results.total_results));
+      } catch (e) {
+        if (e instanceof DiscordAPIError && e.status === 403) {
+          if (!channel_id) {
+            return toolError(
+              "Search returned 403 (Forbidden). This server may not allow search. " +
+                "Provide a channel_id to fall back to scanning channel messages directly.",
+            );
+          }
+          const messages = await scanChannelMessages(client, channel_id, {
+            authorId,
+            content,
+            minId,
+            maxId,
+            limit: limit ?? 25,
+          });
+          if (messages.length === 0) {
+            return toolResult("No matching messages found (scanned via fallback).");
+          }
+          const lines = messages.map(formatMessage);
+          return toolResult(
+            `Search unavailable (403), scanned channel directly. Found ${messages.length} messages:\n\n` +
+              lines.join("\n"),
+          );
+        }
+        throw e;
+      }
     },
   );
 }

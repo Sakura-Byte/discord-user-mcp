@@ -124,6 +124,10 @@ export class DiscordClient {
     return this.request("GET", `/channels/${channelId}/messages${qs ? `?${qs}` : ""}`);
   }
 
+  getMessage(channelId: string, messageId: string): Promise<Message> {
+    return this.request("GET", `/channels/${channelId}/messages/${messageId}`);
+  }
+
   sendMessage(
     channelId: string,
     content: string,

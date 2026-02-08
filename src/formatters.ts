@@ -46,7 +46,7 @@ export function formatMessage(msg: Message): string {
   const ts = formatTimestamp(msg.timestamp);
   const author = displayName(msg.author);
 
-  let prefix = `${ts} ${author}`;
+  let prefix = `${ts} ${author} (ID: ${msg.id})`;
   if (msg.referenced_message) {
     prefix += ` (replying to ${displayName(msg.referenced_message.author)})`;
   }
