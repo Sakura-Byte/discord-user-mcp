@@ -192,12 +192,18 @@ export class DiscordClient {
 
   // ── Threads ──
 
-  getActiveThreads(channelId: string): Promise<ThreadListResponse> {
-    return this.request("GET", `/channels/${channelId}/threads/active`);
+  getArchivedPublicThreads(channelId: string): Promise<ThreadListResponse> {
+    return this.request(
+      "GET",
+      `/channels/${channelId}/threads/archived/public`,
+    );
   }
 
-  getGuildActiveThreads(guildId: string): Promise<ThreadListResponse> {
-    return this.request("GET", `/guilds/${guildId}/threads/active`);
+  getArchivedPrivateThreads(channelId: string): Promise<ThreadListResponse> {
+    return this.request(
+      "GET",
+      `/channels/${channelId}/threads/archived/private`,
+    );
   }
 
   // ── DMs ──
