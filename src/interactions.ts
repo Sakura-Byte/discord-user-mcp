@@ -225,6 +225,7 @@ export class InteractionClient {
         },
       },
       timeoutMs,
+      modal.source_message_id,
     );
   }
 
@@ -292,6 +293,8 @@ export class InteractionClient {
             // Modal events may omit where they came from; submit needs it.
             d.channel_id ??= payload.channel_id;
             d.guild_id ??= payload.guild_id;
+            // A modal opened from a component often answers by editing that message.
+            d.source_message_id ??= watchMessageId;
             outcome.modal = d;
             this.modalCache.set(d.id, d);
             finish();
