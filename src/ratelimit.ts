@@ -13,9 +13,9 @@ const STATE_FILE = path.join(DIR, "ratelimit-last-sent");
 const LOCK_DIR = path.join(DIR, "ratelimit.lock");
 const STALE_LOCK_MS = 5000;
 
-// Hard ceiling of 0.5 requests/second (one every 2s); DISCORD_MAX_RPS may
+// Hard ceiling of 0.2 requests/second (one every 5s); DISCORD_MAX_RPS may
 // only lower it. The few ms of margin absorb clock/timer granularity.
-const HARD_MAX_RPS = 0.5;
+const HARD_MAX_RPS = 0.2;
 const envRps = Number(process.env.DISCORD_MAX_RPS);
 const MAX_RPS = envRps > 0 && envRps < HARD_MAX_RPS ? envRps : HARD_MAX_RPS;
 const MIN_INTERVAL_MS = Math.ceil(1000 / MAX_RPS) + 5;
