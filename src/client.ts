@@ -10,6 +10,7 @@ import type {
   ThreadListResponse,
   User,
 } from "./types.js";
+import { acquireSlot } from "./ratelimit.js";
 
 export class DiscordAPIError extends Error {
   constructor(
@@ -29,6 +30,7 @@ export class DiscordClient {
 
   async request<T>(method: string, path: string, body?: unknown): Promise<T> {
     for (let attempt = 0; attempt < 3; attempt++) {
+      await acquireSlot();
       const res = await fetch(`${this.baseUrl}${path}`, {
         method,
         headers: {

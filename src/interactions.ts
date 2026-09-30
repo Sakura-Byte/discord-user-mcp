@@ -4,6 +4,7 @@ import {
   DiscordGateway,
   SUPER_PROPERTIES,
 } from "./gateway.js";
+import { acquireSlot } from "./ratelimit.js";
 
 // Loose shapes: interaction payloads carry many fields the rest of the
 // codebase never needs, so they are not added to types.ts.
@@ -61,6 +62,7 @@ export class InteractionClient {
   }
 
   private async get<T>(path: string): Promise<T> {
+    await acquireSlot();
     const res = await fetch(`${this.baseUrl}${path}`, {
       headers: this.headers(),
     });
@@ -321,6 +323,7 @@ export class InteractionClient {
         "payload_json",
         JSON.stringify({ ...payload, session_id: sessionId, nonce }),
       );
+      await acquireSlot();
       const res = await fetch(`${this.baseUrl}/interactions`, {
         method: "POST",
         headers: this.headers(),

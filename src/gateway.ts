@@ -2,6 +2,8 @@
 // Slash commands need a live session_id, and ephemeral bot replies are
 // only ever delivered over the gateway, so interactions depend on this.
 
+import { acquireSlot } from "./ratelimit.js";
+
 const GATEWAY_URL = "wss://gateway.discord.gg/?encoding=json&v=9";
 
 // Node >= 22 ships a global WebSocket; @types/node doesn't declare it here.
@@ -43,7 +45,9 @@ export class DiscordGateway {
       return Promise.resolve(this.sessionId);
     }
     if (!this.readyPromise) {
-      this.readyPromise = this.connect(timeoutMs).catch((err) => {
+      this.readyPromise = acquireSlot()
+        .then(() => this.connect(timeoutMs))
+        .catch((err) => {
         this.readyPromise = null;
         throw err;
       });
