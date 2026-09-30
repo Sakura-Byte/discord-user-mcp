@@ -3,6 +3,8 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { DiscordClient } from "./client.js";
+import { DiscordGateway } from "./gateway.js";
+import { InteractionClient } from "./interactions.js";
 import { registerAllTools } from "./tools/register.js";
 
 async function main() {
@@ -36,7 +38,9 @@ async function main() {
     version: "0.1.0",
   });
 
-  registerAllTools(server, client);
+  // The gateway connects lazily, on the first slash-command tool call.
+  const interactions = new InteractionClient(token, new DiscordGateway(token));
+  registerAllTools(server, client, interactions);
 
   const transport = new StdioServerTransport();
   await server.connect(transport);
