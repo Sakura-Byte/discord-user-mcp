@@ -4,7 +4,7 @@ import {
   DiscordGateway,
   SUPER_PROPERTIES,
 } from "./gateway.js";
-import { acquireSlot } from "./ratelimit.js";
+import { acquireSlot, backOff, retryAfterMs } from "./ratelimit.js";
 
 // Loose shapes: interaction payloads carry many fields the rest of the
 // codebase never needs, so they are not added to types.ts.
@@ -33,6 +33,10 @@ const OPT_NUMBER = 10;
 
 const MESSAGE_FLAG_LOADING = 1 << 7;
 
+// A big server's command index is hundreds of commands and Discord limits
+// that endpoint hard, so reuse it for a while.
+const COMMAND_INDEX_TTL_MS = 10 * 60 * 1000;
+
 function snowflakeNonce(): string {
   const ms = BigInt(Date.now() - 1420070400000);
   return ((ms << 22n) | BigInt(Math.floor(Math.random() * 4194303))).toString();
@@ -44,6 +48,8 @@ export class InteractionClient {
   // so keep the ones we have seen for follow-up clicks/submits.
   private messageCache = new Map<string, AnyObj>();
   private modalCache = new Map<string, AnyObj>();
+  private commandIndexCache = new Map<string, { at: number; index: CommandIndex }>();
+  private channelGuildCache = new Map<string, string | null>();
 
   constructor(
     private token: string,
@@ -61,18 +67,44 @@ export class InteractionClient {
     };
   }
 
-  private async get<T>(path: string): Promise<T> {
-    await acquireSlot();
-    const res = await fetch(`${this.baseUrl}${path}`, {
-      headers: this.headers(),
-    });
-    if (!res.ok) {
-      throw new DiscordAPIError(
-        res.status,
-        (await res.json().catch(() => ({}))) as Record<string, unknown>,
-      );
+  /** Rate-limited fetch that waits out 429s (for every process) and retries. */
+  private async send(path: string, init: () => RequestInit): Promise<Response> {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      await acquireSlot();
+      const res = await fetch(`${this.baseUrl}${path}`, {
+        ...init(),
+        headers: this.headers(),
+      });
+      if (res.status === 429) {
+        const wait = retryAfterMs(await res.json().catch(() => ({})));
+        console.error(`Rate limited, retrying in ${wait}ms...`);
+        await backOff(wait);
+        continue;
+      }
+      if (!res.ok) {
+        throw new DiscordAPIError(
+          res.status,
+          (await res.json().catch(() => ({}))) as Record<string, unknown>,
+        );
+      }
+      return res;
     }
-    return (await res.json()) as T;
+    throw new DiscordAPIError(429, {
+      message: "Rate limited after 3 retries. Try again shortly.",
+    });
+  }
+
+  private async get<T>(path: string): Promise<T> {
+    return (await (await this.send(path, () => ({}))).json()) as T;
+  }
+
+  /** The server a channel or thread belongs to; null for DMs. */
+  async resolveGuildId(channelId: string): Promise<string | null> {
+    if (!this.channelGuildCache.has(channelId)) {
+      const ch = await this.get<AnyObj>(`/channels/${channelId}`);
+      this.channelGuildCache.set(channelId, ch.guild_id ?? null);
+    }
+    return this.channelGuildCache.get(channelId)!;
   }
 
   getCachedMessage(id: string): AnyObj | undefined {
@@ -90,11 +122,17 @@ export class InteractionClient {
     const path = guildId
       ? `/guilds/${guildId}/application-command-index`
       : `/channels/${channelId}/application-command-index`;
+    const cached = this.commandIndexCache.get(path);
+    if (cached && Date.now() - cached.at < COMMAND_INDEX_TTL_MS) {
+      return cached.index;
+    }
     const data = await this.get<AnyObj>(path);
-    return {
+    const index = {
       applications: data.applications ?? [],
       commands: data.application_commands ?? [],
     };
+    this.commandIndexCache.set(path, { at: Date.now(), index });
+    return index;
   }
 
   /** Build the nested option list for a (sub)command invocation. */
@@ -158,7 +196,7 @@ export class InteractionClient {
     data: AnyObj,
     timeoutMs: number,
   ): Promise<InteractionOutcome> {
-    return this.send(
+    return this.dispatch(
       {
         type: 2,
         application_id: command.application_id,
@@ -186,7 +224,7 @@ export class InteractionClient {
       data.type = componentType;
       data.values = selectValues;
     }
-    return this.send(
+    return this.dispatch(
       {
         type: 3,
         guild_id: guildId,
@@ -214,7 +252,7 @@ export class InteractionClient {
       if (c.components) return { type: c.type, components: c.components.map(fill) };
       return { type: c.type, custom_id: c.custom_id };
     };
-    return this.send(
+    return this.dispatch(
       {
         type: 5,
         application_id: modal.application?.id,
@@ -235,7 +273,7 @@ export class InteractionClient {
    * POST an interaction and collect what comes back over the gateway:
    * messages tied to the interaction id, or a modal tied to our nonce.
    */
-  private async send(
+  private async dispatch(
     payload: AnyObj,
     timeoutMs: number,
     watchMessageId?: string,
@@ -318,23 +356,12 @@ export class InteractionClient {
     });
 
     try {
-      const form = new FormData();
-      form.append(
-        "payload_json",
-        JSON.stringify({ ...payload, session_id: sessionId, nonce }),
-      );
-      await acquireSlot();
-      const res = await fetch(`${this.baseUrl}/interactions`, {
-        method: "POST",
-        headers: this.headers(),
-        body: form,
+      const body = JSON.stringify({ ...payload, session_id: sessionId, nonce });
+      await this.send("/interactions", () => {
+        const form = new FormData();
+        form.append("payload_json", body);
+        return { method: "POST", body: form };
       });
-      if (!res.ok) {
-        throw new DiscordAPIError(
-          res.status,
-          (await res.json().catch(() => ({}))) as Record<string, unknown>,
-        );
-      }
 
       const timeout = setTimeout(() => {
         outcome.timedOut = true;

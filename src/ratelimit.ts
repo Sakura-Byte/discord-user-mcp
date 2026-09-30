@@ -68,3 +68,25 @@ export async function acquireSlot(): Promise<void> {
     await sleep(wait + Math.random() * 20); // jitter spreads out waiters
   }
 }
+
+/**
+ * Discord answered 429: hold every process off for retryAfterMs, since
+ * the limits Discord enforces are per account, not per process.
+ */
+export async function backOff(retryAfterMs: number): Promise<void> {
+  await withLock(() => {
+    let last = 0;
+    try {
+      last = Number(fs.readFileSync(STATE_FILE, "utf8")) || 0;
+    } catch {
+      // no state yet
+    }
+    const resumeAt = Date.now() + retryAfterMs - MIN_INTERVAL_MS;
+    fs.writeFileSync(STATE_FILE, String(Math.max(last, resumeAt)));
+  });
+}
+
+/** Seconds → ms from a 429 body, with a small cushion. */
+export function retryAfterMs(body: { retry_after?: number }): number {
+  return Math.ceil((body.retry_after ?? 1) * 1000) + 250;
+}

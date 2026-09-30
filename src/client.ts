@@ -10,7 +10,7 @@ import type {
   ThreadListResponse,
   User,
 } from "./types.js";
-import { acquireSlot } from "./ratelimit.js";
+import { acquireSlot, backOff, retryAfterMs } from "./ratelimit.js";
 
 export class DiscordAPIError extends Error {
   constructor(
@@ -45,9 +45,9 @@ export class DiscordClient {
         const data = (await res.json().catch(() => ({}))) as {
           retry_after?: number;
         };
-        const wait = ((data.retry_after ?? 1) * 1000) + Math.random() * 100;
-        console.error(`Rate limited, retrying in ${Math.round(wait)}ms...`);
-        await new Promise((r) => setTimeout(r, wait));
+        const wait = retryAfterMs(data);
+        console.error(`Rate limited, retrying in ${wait}ms...`);
+        await backOff(wait);
         continue;
       }
 

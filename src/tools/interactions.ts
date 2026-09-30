@@ -119,11 +119,12 @@ export function registerInteractionTools(
     "List slash commands usable in a channel (from all bots in the server or DM). Shows each command's options and subcommands.",
     {
       channel_id: z.string().describe("Channel where the command would be run."),
-      guild_id: z.string().optional().describe("Server ID. Omit for DMs."),
+      guild_id: z.string().optional().describe("Server ID. Looked up from the channel if omitted."),
       query: z.string().optional().describe("Only show commands whose name contains this text."),
     },
     async ({ channel_id, guild_id, query }) => {
-      const index = await interactions.getCommandIndex(channel_id, guild_id);
+      const guildId = guild_id ?? (await interactions.resolveGuildId(channel_id)) ?? undefined;
+      const index = await interactions.getCommandIndex(channel_id, guildId);
       const apps = new Map(index.applications.map((a) => [a.id, a.name]));
       const cmds = index.commands.filter(
         (c) => (c.type ?? 1) === 1 && (!query || c.name.includes(query)),
@@ -144,7 +145,7 @@ export function registerInteractionTools(
     "Run a slash command as the user and return the bot's reply, including ephemeral replies only you can see, attachment URLs, buttons, and modals. This sends an interaction from the user's account.",
     {
       channel_id: z.string().describe("Channel (or thread) to run the command in."),
-      guild_id: z.string().optional().describe("Server ID. Omit for DMs."),
+      guild_id: z.string().optional().describe("Server ID. Looked up from the channel if omitted."),
       command: z.string().describe("Command name without the slash, e.g. '下载'."),
       application_id: z.string().optional().describe("Bot application ID, if several bots share the command name."),
       subcommand: z.string().optional().describe("Subcommand path separated by spaces, e.g. 'group sub'."),
@@ -153,7 +154,8 @@ export function registerInteractionTools(
     },
     async ({ channel_id, guild_id, command, application_id, subcommand, options, timeout_seconds }) => {
       const name = command.replace(/^\//, "");
-      const index = await interactions.getCommandIndex(channel_id, guild_id);
+      const guildId = guild_id ?? (await interactions.resolveGuildId(channel_id)) ?? undefined;
+      const index = await interactions.getCommandIndex(channel_id, guildId);
       const matches = index.commands.filter(
         (c) => c.name === name && (c.type ?? 1) === 1 && (!application_id || c.application_id === application_id),
       );
@@ -178,7 +180,7 @@ export function registerInteractionTools(
       const outcome = await interactions.runCommand(
         cmd,
         channel_id,
-        guild_id,
+        guildId,
         data,
         (timeout_seconds ?? 20) * 1000,
       );
@@ -193,7 +195,7 @@ export function registerInteractionTools(
       channel_id: z.string().describe("Channel containing the message."),
       message_id: z.string().describe("ID of the message with the component."),
       custom_id: z.string().describe("custom_id of the button or select menu."),
-      guild_id: z.string().optional().describe("Server ID. Omit for DMs."),
+      guild_id: z.string().optional().describe("Server ID. Looked up from the channel if omitted."),
       values: z.array(z.string()).optional().describe("Selected values, for select menus."),
       timeout_seconds: z.number().min(3).max(120).optional().describe("How long to wait for the reply (default 20)."),
     },
@@ -209,9 +211,10 @@ export function registerInteractionTools(
       if (componentType === null) {
         return toolError(`No component with custom_id "${custom_id}" on message ${message_id}.`);
       }
+      const guildId = guild_id ?? (await interactions.resolveGuildId(channel_id)) ?? undefined;
       const outcome = await interactions.clickComponent(
         { ...message, channel_id: message.channel_id ?? channel_id },
-        guild_id,
+        guildId,
         custom_id,
         componentType,
         componentType === 2 ? undefined : values ?? [],
