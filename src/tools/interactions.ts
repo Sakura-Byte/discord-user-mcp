@@ -119,7 +119,7 @@ export function registerInteractionTools(
     "List slash commands usable in a channel (from all bots in the server or DM). Shows each command's options and subcommands.",
     {
       channel_id: z.string().describe("Channel where the command would be run."),
-      guild_id: z.string().optional().describe("Server ID. Looked up from the channel if omitted."),
+      guild_id: z.string().optional().describe("Server ID. Always pass it for server channels/threads; if omitted it costs an extra rate-limited lookup."),
       query: z.string().optional().describe("Only show commands whose name contains this text."),
     },
     async ({ channel_id, guild_id, query }) => {
@@ -145,7 +145,7 @@ export function registerInteractionTools(
     "Run a slash command as the user and return the bot's reply, including ephemeral replies only you can see, attachment URLs, buttons, and modals. This sends an interaction from the user's account.",
     {
       channel_id: z.string().describe("Channel (or thread) to run the command in."),
-      guild_id: z.string().optional().describe("Server ID. Looked up from the channel if omitted."),
+      guild_id: z.string().optional().describe("Server ID. Always pass it for server channels/threads; if omitted it costs an extra rate-limited lookup."),
       command: z.string().describe("Command name without the slash, e.g. '下载'."),
       application_id: z.string().optional().describe("Bot application ID, if several bots share the command name."),
       subcommand: z.string().optional().describe("Subcommand path separated by spaces, e.g. 'group sub'."),
@@ -195,7 +195,7 @@ export function registerInteractionTools(
       channel_id: z.string().describe("Channel containing the message."),
       message_id: z.string().describe("ID of the message with the component."),
       custom_id: z.string().describe("custom_id of the button or select menu."),
-      guild_id: z.string().optional().describe("Server ID. Looked up from the channel if omitted."),
+      guild_id: z.string().optional().describe("Server ID. Always pass it for server channels/threads; if omitted it costs an extra rate-limited lookup."),
       values: z.array(z.string()).optional().describe("Selected values, for select menus."),
       timeout_seconds: z.number().min(3).max(120).optional().describe("How long to wait for the reply (default 20)."),
     },
