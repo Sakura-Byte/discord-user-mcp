@@ -181,6 +181,9 @@ export class InteractionClient {
     return {
       version: command.version,
       id: command.id,
+      // Guild-scoped commands must say which guild they belong to, or
+      // Discord answers "Unknown Integration".
+      ...(command.guild_id ? { guild_id: command.guild_id } : {}),
       name: command.name,
       type: command.type ?? 1,
       options: root,
