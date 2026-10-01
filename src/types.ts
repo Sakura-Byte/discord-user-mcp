@@ -80,6 +80,19 @@ export interface Message {
   referenced_message?: Message | null;
   type: number;
   message_reference?: MessageReference;
+  flags?: number;
+  components?: MessageComponent[];
+}
+
+export interface MessageComponent {
+  type: number;
+  custom_id?: string;
+  label?: string;
+  url?: string;
+  content?: string;
+  components?: MessageComponent[];
+  component?: MessageComponent;
+  accessory?: MessageComponent;
 }
 
 export interface Attachment {

@@ -291,10 +291,11 @@ export class InteractionClient {
     let finish: () => void = () => {};
     const done = new Promise<void>((r) => (finish = r));
     let settleTimer: ReturnType<typeof setTimeout> | null = null;
-    // After a final (non-loading) reply, linger briefly for follow-ups.
+    // After a final (non-loading) reply, linger for follow-ups: bots often
+    // post a "verifying..." placeholder and edit it seconds later.
     const settleSoon = () => {
       if (settleTimer) clearTimeout(settleTimer);
-      settleTimer = setTimeout(finish, 1500);
+      settleTimer = setTimeout(finish, 5000);
     };
 
     const byId = new Map<string, AnyObj>();

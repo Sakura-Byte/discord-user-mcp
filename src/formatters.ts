@@ -7,6 +7,7 @@ import type {
   GuildDetailed,
   GuildMember,
   Message,
+  MessageComponent,
   Role,
   User,
 } from "./types.js";
@@ -33,13 +34,32 @@ export function displayName(user: User): string {
 
 function formatAttachment(a: Attachment): string {
   const sizeMB = (a.size / (1024 * 1024)).toFixed(1);
-  return `[file: ${a.filename}, ${sizeMB}MB]`;
+  return `[file: ${a.filename}, ${sizeMB}MB, ${a.url}]`;
 }
 
 function formatEmbed(e: Embed): string {
   if (e.title) return `[embed: ${e.title}]`;
   if (e.url) return `[link: ${e.url}]`;
   return "[embed]";
+}
+
+// Text and buttons from component messages (bot panels), which otherwise
+// show up as empty.
+function formatComponents(components: MessageComponent[] | undefined): string[] {
+  const out: string[] = [];
+  const walk = (cs: MessageComponent[] | undefined) => {
+    for (const c of cs ?? []) {
+      if (c.type === 10 && c.content) out.push(c.content);
+      else if (c.type === 2 && c.url) out.push(`[link button: ${c.label ?? ""} → ${c.url}]`);
+      else if (c.type === 2) out.push(`[button: ${c.label ?? ""} (custom_id: ${c.custom_id})]`);
+      else if ([3, 5, 6, 7, 8].includes(c.type)) out.push(`[select menu (custom_id: ${c.custom_id})]`);
+      walk(c.components);
+      if (c.component) walk([c.component]);
+      if (c.accessory) walk([c.accessory]);
+    }
+  };
+  walk(components);
+  return out;
 }
 
 export function formatMessage(msg: Message): string {
@@ -65,6 +85,7 @@ export function formatMessage(msg: Message): string {
   for (const e of msg.embeds) {
     parts.push(formatEmbed(e));
   }
+  parts.push(...formatComponents(msg.components));
 
   const body = parts.join(" ") || "[empty message]";
   return `${prefix}: ${body}`;

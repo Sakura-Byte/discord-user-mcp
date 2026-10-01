@@ -126,8 +126,16 @@ export class DiscordClient {
     return this.request("GET", `/channels/${channelId}/messages${qs ? `?${qs}` : ""}`);
   }
 
-  getMessage(channelId: string, messageId: string): Promise<Message> {
-    return this.request("GET", `/channels/${channelId}/messages/${messageId}`);
+  async getMessage(channelId: string, messageId: string): Promise<Message> {
+    // The single-message endpoint is bot-only for user accounts.
+    const [msg] = await this.request<Message[]>(
+      "GET",
+      `/channels/${channelId}/messages?around=${messageId}&limit=1`,
+    );
+    if (!msg || msg.id !== messageId) {
+      throw new DiscordAPIError(404, { message: "Unknown Message" });
+    }
+    return msg;
   }
 
   sendMessage(
